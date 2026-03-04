@@ -1,79 +1,58 @@
 ---
 name: Init Workspace
 description: >-
-  This skill should be used when the user asks to "create a workspace",
-  "init workspace", "initialize workspace", "set up workspace here",
-  "scaffold workspace", or mentions creating a new cogni-works workplace.
-  Provides workspace initialization with plugin discovery, environment
-  variable generation, and shared foundation setup.
-version: 0.1.0
+  Initialize a cogni-works workspace with shared foundation for marketplace
+  plugins. Use this skill whenever someone asks to create, set up, scaffold, or
+  initialize a workspace — including phrases like "set up my workplace",
+  "get started with cogni", "create a new project workspace", or any mention of
+  workspace initialization. Also trigger when someone runs a fresh plugin
+  install and needs the shared foundation that plugins depend on.
+version: 0.2.0
 ---
 
 # Init Workspace
 
-Initialize a cogni-works workspace by creating the shared foundation that all marketplace plugins depend on. The workspace provides centralized environment configuration, theme storage, and plugin registration.
+A cogni-works workspace is the shared foundation that all marketplace plugins depend on. It centralizes environment configuration, theme storage, and plugin registration so that plugins can find each other and share resources. Without a workspace, plugins operate in isolation and can't resolve paths or discover themes.
 
-## Prerequisites
+## Before You Start
 
-Before initialization, verify dependencies are available by running:
+Run the dependency checker — it returns JSON so you can parse the result and tell the user exactly what's missing:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/check-dependencies.sh
 ```
 
-Required: `jq`, `python3`, `bash` 3.2+. Optional: `curl`, `git`.
+Required: `jq`, `python3`, `bash` 3.2+. If required dependencies are missing, show the user what to install before continuing. Optional dependencies (`curl`, `git`, `bc`) are fine to skip.
 
-## Initialization Workflow
+## Initialization Flow
 
-### Step 1: Determine Target Location
+### 1. Where and Whether
 
-Ask the user where to create the workspace. Default to the current working directory. Confirm the path before proceeding.
+Ask the user where to create the workspace. Default to the current working directory.
 
-If a `.workspace-config.json` already exists at the target, warn the user and suggest using `update-workspace` instead.
+If `.workspace-config.json` already exists at the target, this workspace was already initialized. Suggest `update-workspace` instead — re-initializing would overwrite their configuration.
 
-### Step 2: Discover Installed Plugins
+### 2. Discover Plugins
 
-Run the plugin discovery script to scan for installed cogni-* marketplace plugins:
+Scan the marketplace cache for installed cogni-* plugins:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/discover-plugins.sh
 ```
 
-This scans `$CLAUDE_PLUGIN_ROOT` (or the marketplace cache) for plugins with `.claude-plugin/plugin.json` markers. Present the discovered plugins to the user and ask for confirmation before registering them.
+The script returns JSON with each plugin's name, version, path, and computed environment variable names. Present the list to the user so they can confirm, add, or remove plugins before proceeding. This matters because the plugin list determines which environment variables get generated — missing a plugin here means it won't be wired up.
 
-### Step 3: Ask Configuration Questions
+### 3. Gather Preferences
 
-Gather workspace preferences using AskUserQuestion:
+Use AskUserQuestion to collect:
 
-1. **Language preference**: EN or DE (affects output-styles and templates)
-2. **Confirm plugin list**: Show discovered plugins, let user add/remove
-3. **Tool integrations**: Which tools are in use? (Obsidian, VS Code, other) - for delegation to tool-specific plugins
+1. **Language** — EN or DE. This controls which behavioral output-style anchors get installed, affecting how Claude communicates in this workspace.
+2. **Plugin confirmation** — Show discovered plugins, let the user adjust.
+3. **Tool integrations** — Obsidian, VS Code, other. This gets stored in the config so tool-specific plugins know what to set up later.
 
-### Step 4: Generate Workspace Foundation
+### 4. Generate the Workspace
 
-Create the workspace structure:
-
-```
-{target}/
-├── .workspace-config.json       # Workspace metadata
-├── .workspace-env.sh            # Environment for non-Claude contexts
-├── .claude/
-│   ├── settings.local.json      # Single source of truth for env vars
-│   └── output-styles/
-│       ├── workspace-en.md      # EN behavioral anchors (if EN selected)
-│       └── workspace-de.md      # DE behavioral anchors (if DE selected)
-└── cogni-workspace/
-    └── themes/                  # Shared theme storage
-        └── _template/
-            └── theme.md
-```
-
-Generate environment variables using the naming convention:
-- Known plugins (cogni-research, cogni-narrative, etc.): `COGNI_{NAME}_ROOT`, `COGNI_{NAME}_PLUGIN`
-- Other plugins: `PLUGIN_{NAME}_ROOT`, `PLUGIN_{NAME}_PLUGIN`
-- Always set: `PROJECT_AGENTS_OPS_ROOT`, `COGNI_WORKSPACE_ROOT`, `COGNI_WORKSPACE_PLUGIN`
-
-Run the settings generator:
+This is the core step. Run the settings generator with the confirmed inputs:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/generate-settings.sh \
@@ -82,69 +61,47 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/generate-settings.sh \
   --plugins "${PLUGIN_LIST_JSON}"
 ```
 
-### Step 5: Copy Output Styles
+The script creates three files:
+- **`.claude/settings.local.json`** — Environment variables that Claude Code auto-injects. This is the single source of truth for plugin paths.
+- **`.workspace-env.sh`** — Same variables exported for non-Claude contexts (Obsidian Terminal, VS Code tasks, CI/CD).
+- **`.workspace-config.json`** — Workspace metadata (version, language, plugin list, timestamps).
 
-Copy the language-appropriate output-style files from `${CLAUDE_PLUGIN_ROOT}/assets/output-styles/` to `${TARGET_DIR}/.claude/output-styles/`.
+It also creates data directories for each registered plugin under the workspace root.
 
-### Step 6: Copy Theme Template
+Pass the plugins argument as either a JSON string or a path to a JSON file containing the plugin array from the discovery step.
 
-Copy `${CLAUDE_PLUGIN_ROOT}/themes/_template/` to `${TARGET_DIR}/cogni-workspace/themes/_template/`.
+### 5. Install Output Styles and Theme Template
 
-### Step 7: Delegate Tool-Specific Setup
+Copy the language-appropriate output-style file. These files contain behavioral anchors that shape Claude's communication patterns in this workspace:
 
-If the user indicated they use Obsidian and cogni-obsidian is installed, inform them they can run cogni-obsidian's setup separately. Do NOT call cogni-obsidian scripts directly - respect plugin boundaries.
-
-Similarly for VS Code or other tool integrations.
-
-### Step 8: Present Summary
-
-Show what was created:
-- Workspace path
-- Registered plugins with their env var names
-- Language setting
-- Theme storage location
-- Next steps (install themes, configure tools)
-
-## Key Files
-
-### .workspace-config.json
-
-```json
-{
-  "version": "0.1.0",
-  "language": "en",
-  "created_at": "ISO8601",
-  "updated_at": "ISO8601",
-  "installed_plugins": ["cogni-research", "cogni-narrative"],
-  "tool_integrations": ["obsidian", "vscode"]
-}
+```bash
+cp "${CLAUDE_PLUGIN_ROOT}/assets/output-styles/workspace-${LANGUAGE}.md" \
+   "${TARGET_DIR}/.claude/output-styles/"
 ```
 
-### .claude/settings.local.json
+Create the `output-styles` directory first if needed. Then copy the theme template:
 
-Contains `env` block with all plugin environment variables. This is the single source of truth - Claude Code auto-injects these as environment variables.
+```bash
+cp -r "${CLAUDE_PLUGIN_ROOT}/themes/_template/" \
+      "${TARGET_DIR}/cogni-workspace/themes/_template/"
+```
 
-### .workspace-env.sh
+The template gives users a starting point for creating custom themes that visual plugins consume.
 
-Mirrors settings.local.json for non-Claude contexts (Obsidian Terminal, VS Code tasks, CI/CD).
+### 6. Mention Tool-Specific Setup
 
-## Environment Variable Naming Convention
+If the user indicated they use Obsidian or VS Code and relevant plugins are installed (cogni-obsidian, etc.), let them know those plugins have their own setup steps they can run separately. Don't call other plugins' scripts — each plugin manages its own setup.
 
-| Plugin | ROOT var | PLUGIN var |
-|--------|----------|------------|
-| cogni-research | `COGNI_RESEARCH_ROOT` | `COGNI_RESEARCH_PLUGIN` |
-| cogni-narrative | `COGNI_NARRATIVE_ROOT` | `COGNI_NARRATIVE_PLUGIN` |
-| cogni-workplace | `COGNI_WORKSPACE_ROOT` | `COGNI_WORKSPACE_PLUGIN` |
-| cogni-obsidian | `COGNI_OBSIDIAN_ROOT` | `COGNI_OBSIDIAN_PLUGIN` |
-| my-custom-plugin | `PLUGIN_MY_CUSTOM_PLUGIN_ROOT` | `PLUGIN_MY_CUSTOM_PLUGIN_PLUGIN` |
+### 7. Summarize
 
-- `*_ROOT` = workspace data directory (where plugin writes output)
-- `*_PLUGIN` = plugin installation path (where plugin code lives)
+Show what was created in a compact format:
+- Workspace path
+- Registered plugins with their environment variable names
+- Language setting
+- Next steps: install themes, configure tool integrations, explore plugin capabilities
 
-## Additional Resources
+## Error Handling
 
-### Scripts
+If any script returns `"success": false` in its JSON output, read the `data.error` field and relay it to the user. Don't continue past a failed step — the workspace would be in an incomplete state.
 
-- **`${CLAUDE_PLUGIN_ROOT}/scripts/check-dependencies.sh`** - Verify required tools
-- **`${CLAUDE_PLUGIN_ROOT}/scripts/discover-plugins.sh`** - Scan for installed plugins
-- **`${CLAUDE_PLUGIN_ROOT}/scripts/generate-settings.sh`** - Generate settings.local.json and .workspace-env.sh
+If `generate-settings.sh` fails partway through, clean up by removing any partially created files before reporting the error.
