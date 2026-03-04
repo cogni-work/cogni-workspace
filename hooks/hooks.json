@@ -2,11 +2,16 @@
   "hooks": {
     "SessionStart": [
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/on-session-start.sh",
-        "timeout": 15,
-        "enabled": true,
-        "name": "workspace-status"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/on-session-start.sh",
+            "timeout": 15,
+            "enabled": true,
+            "name": "workspace-status"
+          }
+        ]
       }
     ]
   }
