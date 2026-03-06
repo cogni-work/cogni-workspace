@@ -1,5 +1,5 @@
 ---
-name: Manage Themes
+name: manage-themes
 description: >-
   Manage visual design themes for the workspace — extract themes from live
   websites (via Chrome), PowerPoint templates, or presets, then store and apply

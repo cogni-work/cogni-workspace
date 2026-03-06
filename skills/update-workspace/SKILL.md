@@ -1,5 +1,5 @@
 ---
-name: Update Workspace
+name: update-workspace
 description: >-
   This skill should be used when the user asks to "update workspace",
   "refresh workspace", "sync workspace", "update plugins",

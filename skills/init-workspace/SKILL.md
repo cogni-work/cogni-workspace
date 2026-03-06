@@ -1,5 +1,5 @@
 ---
-name: Init Workspace
+name: init-workspace
 description: >-
   Initialize a cogni-works workspace with shared foundation for marketplace
   plugins. Use this skill whenever someone asks to create, set up, scaffold, or
