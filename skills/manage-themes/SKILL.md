@@ -67,7 +67,7 @@ When the user asks for theme advice — e.g., "what theme for my brand?", "help 
 | Nothing concrete, just a description | → **Operation #4** (Create from Preset) — recommend 2-3 theme-factory presets that match their mood/industry, let them pick or blend |
 | An existing workspace theme that's close | → **Operation #5** (Audit/Improve) — review it and suggest targeted tweaks |
 
-After creating or selecting a theme, always run a quick audit (Operation #5) on the result before finalizing — this catches contrast issues and missing sections early.
+After creating or selecting a theme, always run a quick audit (Operation #5) on the result before finalizing — this catches contrast issues and missing sections early. Then offer to generate a theme showcase (Operation #7) so the user can see all tokens in action.
 
 ### 2. List Themes
 
@@ -100,6 +100,7 @@ Extract a visual theme from a live website using Chrome browser automation. This
 5. Research the brand via WebSearch for design philosophy context
 6. Generate theme.md following the template (see Theme File Format below)
 7. Save to `{themes-dir}/{theme-slug}/theme.md`
+8. Offer to generate a theme showcase (Operation #7)
 
 **CSS Extraction Script** (execute via JavaScript tool):
 ```javascript
@@ -142,6 +143,7 @@ Extract theme from a PowerPoint template file. PPTX files embed theme XML in the
    - `a:minorFont` → Body font family
 4. Generate theme.md following the template (see Theme File Format below)
 5. Save to `{themes-dir}/{theme-slug}/theme.md`
+6. Offer to generate a theme showcase (Operation #7)
 
 ### 5. Create Theme from Preset
 
@@ -151,6 +153,7 @@ Delegate to `document-skills:theme-factory` for preset theme creation:
 2. Once user selects/creates a theme, capture the color palette and typography
 3. Generate a theme.md following the template (see Theme File Format below)
 4. Save to `{themes-dir}/{theme-slug}/theme.md`
+5. Offer to generate a theme showcase (Operation #7)
 
 This bridges theme-factory's preset system with the workspace's theme storage.
 
@@ -182,9 +185,33 @@ When the user wants feedback on an existing theme — e.g., "my theme feels off"
 - Check whether the stated principles are actionable and specific enough for a downstream skill to follow
 - Flag vague principles (e.g., "make it look good") and suggest concrete rewrites
 
-**Output format**: Present findings as a checklist grouped by dimension, with pass/fail/warning per item and concrete suggestions for anything that fails. If the user agrees with suggestions, apply the fixes directly to the theme.md.
+**Output format**: Present findings as a checklist grouped by dimension, with pass/fail/warning per item and concrete suggestions for anything that fails. If the user agrees with suggestions, apply the fixes directly to the theme.md. After applying fixes, offer to regenerate the theme showcase (Operation #7) so the user can verify the changes visually.
 
-### 7. Apply Theme
+### 7. Generate Theme Showcase
+
+After creating, extracting, or improving a theme, offer to generate an interactive React showcase component that demonstrates every design token in context — colors, typography, buttons, cards, tables, forms, status badges, KPI panels, pricing layouts, and navigation patterns.
+
+**When to offer**: After any successful theme creation or update (Operations 3–6), ask the user: *"Want me to generate a theme showcase component so you can see all the tokens in action?"*
+
+**Workflow**:
+
+1. Read the theme.md for the target theme
+2. Generate a self-contained JSX file that renders every palette color, typography scale, button variant, card layout, status badge, data table, form element, and at least one dark-section/light-section pair — all wired to the theme's actual hex values, fonts, and design principles
+3. Save to `{themes-dir}/{theme-slug}/{theme-slug}-theme-showcase.jsx`
+
+**Output requirements**:
+
+- Single-file React component using inline styles (no external CSS) — works in any React sandbox or claude.ai artifact
+- A `theme` object at the top mapping every palette role (primary, secondary, accent, accentMuted, accentDark, bg, surface, surfaceDark, text, textLight, textMuted, border, plus status colors) to the hex values from theme.md
+- Google Fonts link injected at runtime for the theme's font families
+- Sections: Hero (dark), Color Palette grid, Typography scale, Buttons & interactions (toggle, slider), Navigation & Tabs, Cards, Status Badges + Data Table (dark), KPI Dashboard, Form Elements, Pricing example (dark), Footer
+- Interactive elements using `useState` (tabs, toggle, slider, card selection) to show the theme in motion
+- Design principles from the theme.md reflected in visual structure (e.g., dark-light rhythm, accent usage rules)
+- The component name follows PascalCase of the theme slug (e.g., `cogni-work` → `CogniWorkThemeShowcase`)
+
+**Reference**: See `themes/cogni-work/cogni-work-theme-showcase.jsx` as the canonical example of quality, structure, and completeness.
+
+### 8. Apply Theme
 
 When the user asks to apply a theme, read the theme.md and feed its contents into the downstream skill that produces the output.
 
@@ -222,3 +249,4 @@ Theme directories use kebab-case slugs derived from the brand/source name:
 ### Template
 
 - **`{themes-dir}/_template/theme.md`** — Canonical theme template with all sections. Read this template before generating any new theme to ensure all required sections are present.
+- **`{themes-dir}/cogni-work/cogni-work-theme-showcase.jsx`** — Reference showcase component. Read this before generating a showcase for a new theme to match the expected quality, structure, and section coverage.
