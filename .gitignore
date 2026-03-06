@@ -10,3 +10,6 @@ Thumbs.db
 # Logs
 *.log
 excalidraw.log
+
+# Skill eval workspaces
+skills/*-workspace/

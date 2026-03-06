@@ -3,11 +3,17 @@ name: Manage Themes
 description: >-
   Manage visual design themes for the workspace — extract themes from live
   websites (via Chrome), PowerPoint templates, or presets, then store and apply
-  them to all visual outputs (slides, documents, diagrams, reports). Use this
-  skill whenever the user mentions themes, brand colors, visual identity,
-  extracting styles, or wants consistent look-and-feel across outputs. Even if
-  the user just says "make it match our brand", "use our company colors", or
-  "grab the style from that site", this skill applies.
+  them to all visual outputs (slides, documents, diagrams, reports). Also audits
+  and improves existing themes: contrast/accessibility checks, palette harmony,
+  typography pairing, and completeness review. Use this skill whenever the user
+  mentions themes, brand colors, visual identity, extracting styles, or wants
+  consistent look-and-feel across outputs. Also triggers when the user wants to
+  review, audit, fix, or improve a theme — e.g., "my theme feels off", "check
+  contrast", "improve my colors". Also triggers when the user needs help choosing
+  or building a theme — e.g., "what theme for my brand?", "help me pick a
+  theme", "I need a visual identity for my startup". Even if the user just says
+  "make it match our brand", "use our company colors", or "grab the style from
+  that site", this skill applies.
 version: 0.2.0
 ---
 
@@ -41,7 +47,29 @@ When a theme slug already exists, ask the user whether to overwrite or create a 
 
 ## Operations
 
-### 1. List Themes
+### 1. Recommend Theme
+
+When the user asks for theme advice — e.g., "what theme for my brand?", "help me pick a theme", "I need a visual identity" — guide them through a short discovery to route them to the best creation path.
+
+**Discovery questions** (ask only what's needed, skip what you can infer from context):
+
+1. **Existing assets?** — "Do you have a website, PowerPoint template, or brand guidelines (colors/fonts) I can work from?"
+2. **Industry & audience** — "What's the domain (fintech, healthcare, creative agency, etc.) and who sees these outputs?"
+3. **Mood & tone** — "Any adjectives that describe the feel you're after? (e.g., bold & modern, calm & trustworthy, playful)"
+
+**Routing logic based on answers:**
+
+| User has... | Action |
+|---|---|
+| A website URL | → **Operation #2** (Grab from Website) — extract the real brand |
+| A PPTX template | → **Operation #3** (Grab from PPTX) — extract from the template |
+| Specific colors/fonts but no file | → Create a custom theme.md directly from their inputs, following the template |
+| Nothing concrete, just a description | → **Operation #4** (Create from Preset) — recommend 2-3 theme-factory presets that match their mood/industry, let them pick or blend |
+| An existing workspace theme that's close | → **Operation #5** (Audit/Improve) — review it and suggest targeted tweaks |
+
+After creating or selecting a theme, always run a quick audit (Operation #5) on the result before finalizing — this catches contrast issues and missing sections early.
+
+### 2. List Themes
 
 When the user asks to list or show available themes, scan the themes directory:
 
@@ -53,7 +81,7 @@ path: "${COGNI_WORKSPACE_ROOT}/themes"
 
 Present each theme with its name (directory name) and first line description from the theme.md file.
 
-### 2. Grab Theme from Website
+### 3. Grab Theme from Website
 
 Extract a visual theme from a live website using Chrome browser automation. This produces a brand-accurate theme.md from real CSS and visual inspection.
 
@@ -94,7 +122,7 @@ JSON.stringify({
 
 Augment extracted values with visual inspection of the screenshot. Infer design principles from the overall visual language.
 
-### 3. Grab Theme from PPTX
+### 4. Grab Theme from PPTX
 
 Extract theme from a PowerPoint template file. PPTX files embed theme XML in their ZIP structure — the key data lives in `ppt/theme/theme1.xml`.
 
@@ -115,7 +143,7 @@ Extract theme from a PowerPoint template file. PPTX files embed theme XML in the
 4. Generate theme.md following the template (see Theme File Format below)
 5. Save to `{themes-dir}/{theme-slug}/theme.md`
 
-### 4. Create Theme from Preset
+### 5. Create Theme from Preset
 
 Delegate to `document-skills:theme-factory` for preset theme creation:
 
@@ -126,7 +154,37 @@ Delegate to `document-skills:theme-factory` for preset theme creation:
 
 This bridges theme-factory's preset system with the workspace's theme storage.
 
-### 5. Apply Theme
+### 6. Audit / Improve Theme
+
+When the user wants feedback on an existing theme — e.g., "my theme feels off", "check my colors", "improve this theme" — read the theme.md and evaluate it across these dimensions:
+
+**Contrast & Accessibility**
+- Calculate WCAG 2.1 contrast ratios for every foreground/background pair in the palette (Text on Background, Text on Surface, Text Muted on Background, etc.)
+- Flag any pair below AA (4.5:1 for normal text, 3:1 for large text/UI elements)
+- Suggest replacement hex values that fix failures while staying close to the original hue
+
+**Palette Harmony**
+- Check whether the palette follows a recognizable color scheme (complementary, analogous, triadic, split-complementary)
+- Flag colors that feel disconnected — e.g., an accent that clashes with the primary
+- Suggest adjustments that bring cohesion without losing brand identity
+
+**Typography Pairing**
+- Evaluate whether header and body fonts complement each other (contrast in weight/style without clashing)
+- Flag if both fonts are the same family with no differentiation, or if a decorative font is used for body text
+- Suggest alternatives from commonly available web/system fonts if pairing is weak
+
+**Completeness**
+- Compare against the template at `{themes-dir}/_template/theme.md`
+- Flag missing sections (e.g., no Status Colors, no Design Principles, no Source)
+- Flag palette roles that are absent — a theme needs at minimum: Primary, Background, Surface, Text
+
+**Design Principles Review**
+- Check whether the stated principles are actionable and specific enough for a downstream skill to follow
+- Flag vague principles (e.g., "make it look good") and suggest concrete rewrites
+
+**Output format**: Present findings as a checklist grouped by dimension, with pass/fail/warning per item and concrete suggestions for anything that fails. If the user agrees with suggestions, apply the fixes directly to the theme.md.
+
+### 7. Apply Theme
 
 When the user asks to apply a theme, read the theme.md and feed its contents into the downstream skill that produces the output.
 
