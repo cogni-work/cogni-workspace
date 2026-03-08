@@ -18,3 +18,7 @@ Wenn die Absicht des Benutzers Workspace-Verwaltung betrifft, zum passenden Skil
 | Workspace aktualisieren/synchronisieren | update-workspace |
 | Theme extrahieren/auflisten/anwenden/erstellen | manage-themes |
 | Workspace Status/Gesundheit/Pruefen | workspace-status |
+
+## Sprachpraeferenz
+
+Workspace-Sprache ist `de` (in `.workspace-config.json` gesetzt). Plugins mit zweisprachiger Unterstuetzung (DE/EN) verwenden dies als Standard. Benutzer koennen pro Aufruf ueberschreiben.

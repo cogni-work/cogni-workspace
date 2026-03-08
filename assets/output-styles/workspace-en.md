@@ -18,3 +18,7 @@ When the user's intent involves workspace management, route to the appropriate s
 | Update/refresh/sync workspace | update-workspace |
 | Theme grab/list/apply/create | manage-themes |
 | Workspace status/health/check | workspace-status |
+
+## Language Preference
+
+Workspace language is `en` (set in `.workspace-config.json`). Plugins that support bilingual operation (DE/EN) read this as their default. Users can override per-invocation.
