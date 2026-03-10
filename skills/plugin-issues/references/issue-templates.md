@@ -1,12 +1,14 @@
 # Issue Templates
 
-Templates for the four issue types. Fill placeholders before presenting to the user.
+Templates for the four issue types. Fill what you can from the conversation — omit
+sections entirely if you don't have meaningful content for them. A concise issue with
+real information is better than a complete template filled with "N/A".
 
 ## Bug Report
 
-```markdown
-## Bug Report: {plugin_name}
+**Title format:** `[Bug] {plugin_name}: {short description}`
 
+```markdown
 **Plugin:** {plugin_name} v{version}
 **Marketplace:** {marketplace}
 **Environment:** {os} / Claude Code
@@ -33,9 +35,9 @@ Templates for the four issue types. Fill placeholders before presenting to the u
 
 ## Feature Request
 
-```markdown
-## Feature Request: {plugin_name}
+**Title format:** `[Feature] {plugin_name}: {short description}`
 
+```markdown
 **Plugin:** {plugin_name} v{version}
 **Marketplace:** {marketplace}
 
@@ -47,16 +49,13 @@ Templates for the four issue types. Fill placeholders before presenting to the u
 
 ### Alternatives considered
 {alternatives}
-
-### Additional context
-{context}
 ```
 
 ## Change Request
 
-```markdown
-## Change Request: {plugin_name}
+**Title format:** `[Change] {plugin_name}: {short description}`
 
+```markdown
 **Plugin:** {plugin_name} v{version}
 **Marketplace:** {marketplace}
 
@@ -68,19 +67,13 @@ Templates for the four issue types. Fill placeholders before presenting to the u
 
 ### Motivation
 {motivation}
-
-### Impact assessment
-{impact}
-
-### Additional context
-{context}
 ```
 
 ## Question
 
-```markdown
-## Question: {plugin_name}
+**Title format:** `[Question] {plugin_name}: {short description}`
 
+```markdown
 **Plugin:** {plugin_name} v{version}
 **Marketplace:** {marketplace}
 

@@ -1,164 +1,167 @@
 ---
 name: plugin-issues
 description: |
-  File and track issues (bugs, feature requests, change requests, questions) against cogni-works
-  and cogni-works-pro plugins. Resolves the target plugin's GitHub repository automatically,
+  File and track GitHub issues (bugs, feature requests, change requests, questions) against
+  cogni-works ecosystem plugins. Resolves the target plugin's repository automatically,
   drafts issues from templates, creates them via `gh` CLI, and tracks them locally.
-  Use this skill when the user wants to report a bug, request a feature, file a change request,
-  ask a question about a plugin, list their filed issues, or check issue status.
+  Use this skill whenever the user wants to report a bug, request a feature, file a change
+  request, ask a question about a plugin, list filed issues, or check issue status.
+  Also trigger when the user says things like "this plugin is broken", "I found a problem
+  with {plugin}", "can we get X added to {plugin}", "{plugin} doesn't work", "open an issue",
+  "something is wrong with {plugin}", or any complaint/suggestion about a specific plugin —
+  even if they don't use the word "issue".
 ---
 
-# Plugin Issues Orchestrator
+# Plugin Issues
 
-You manage the lifecycle of GitHub issues for cogni-works ecosystem plugins: resolving which repository a plugin belongs to, drafting issues from templates, creating them via `gh` CLI, and tracking them locally.
+Manage the lifecycle of GitHub issues for cogni-works ecosystem plugins: resolve which
+repository a plugin belongs to, draft issues from templates, create them via `gh`, and
+track them locally.
 
-## Choosing the right mode
+## Environment
 
-Determine the operating mode from the user's intent:
+The skill scripts live at `${COGNI_WORKSPACE_PLUGIN}/skills/plugin-issues/scripts/`.
+If `COGNI_WORKSPACE_PLUGIN` is not set, fall back to the workspace root's plugin path
+(typically the directory containing `.claude-plugin/plugin.json`). If you still can't
+find the scripts, tell the user — don't guess paths.
 
-| Mode | What triggers it | What it does |
-|------|-----------------|--------------|
-| `create` | "file issue", "report bug", "request feature", "change request on {plugin}", "question about {plugin}" | Resolve plugin, draft from template, user reviews, create on GitHub, log locally |
-| `list` | "my issues", "show issues", "list issues" | Read local `issues.json`, display grouped by plugin |
-| `status` | "check issue", "issue status", "update on issue" | Fetch current state from GitHub, update local record |
-| `browse` | "open issue", "show issue in browser" | Open issue in browser via `gh issue view --web` |
+## Modes
 
-When in doubt, `list` is a safe default.
+Pick the mode from the user's intent:
 
-## Prerequisites check
+| Mode | Triggers | Action |
+|------|----------|--------|
+| **create** | reporting bugs, requesting features, filing change requests, asking plugin questions | Resolve plugin, draft from template, confirm with user, create on GitHub, log locally |
+| **list** | "my issues", "show issues", "what have I filed" | Read local state, display grouped by plugin |
+| **status** | "check issue #N", "any updates on my issue" | Fetch from GitHub, update local record |
+| **browse** | "open issue", "show in browser" | Open via `gh issue view --web` |
 
-Before any operation that requires `gh`, verify authentication:
+Default to **list** when intent is unclear.
+
+## Prerequisites
+
+Before any `gh` operation, verify auth:
 
 ```bash
 gh auth status 2>&1
 ```
 
-If this fails, guide the user:
-1. Install: `brew install gh`
-2. Authenticate: `gh auth login`
-3. Ensure the account has access to the target repository
+If this fails, guide the user to install (`brew install gh`) and authenticate (`gh auth login`).
+Do not attempt issue creation without valid auth — fail fast.
 
-Fail fast — do not attempt issue creation without valid auth.
+## Workspace init
 
-## Workspace setup
-
-Before any operation, ensure the local state directory exists. Run the init script (idempotent):
+Run once before any operation (idempotent):
 
 ```bash
-bash "${COGNI_WORKSPACE_PLUGIN}/skills/plugin-issues/scripts/issue-store.sh" init "${working_dir}"
+bash "${SKILL_DIR}/scripts/issue-store.sh" init "${working_dir}"
 ```
 
-The `working_dir` defaults to the current working directory. All issue state lives in `{working_dir}/cogni-issues/`.
+`working_dir` defaults to the current working directory. State lives in `{working_dir}/cogni-issues/`.
 
 ## Create mode
 
-### Step 1: Resolve plugin
-
-Run the resolver to find the plugin's repository:
+### 1. Resolve the plugin
 
 ```bash
-bash "${COGNI_WORKSPACE_PLUGIN}/skills/plugin-issues/scripts/resolve-plugin.sh" "{plugin_name}"
+bash "${SKILL_DIR}/scripts/resolve-plugin.sh" "<plugin_name>"
 ```
 
-- If the result has `"ambiguous": true`, present the matches and ask the user which marketplace they mean
-- If the result has `"error"`, tell the user the plugin wasn't found and list available plugins
-- Extract `owner_repo` for the `gh` command
+The script returns JSON. Handle these cases:
+- `"ambiguous": true` — present matches, ask which marketplace
+- `"error"` — plugin not found; list what's available and ask the user to clarify
+- Success — extract `owner_repo`, `version`, `marketplace` for later steps
 
-### Step 2: Determine issue type
+### 2. Determine the issue type
 
-From the user's description, determine the type:
+Infer the type from context:
 
-| Type | Indicators |
-|------|-----------|
-| `bug` | "bug", "broken", "error", "crash", "doesn't work", "fails" |
-| `feature` | "feature", "add", "new capability", "would be nice", "request" |
-| `change-request` | "change", "modify", "update behavior", "different", "adjust" |
-| `question` | "question", "how to", "why does", "wondering", "confused" |
+| Type | Signals |
+|------|---------|
+| `bug` | "broken", "error", "crash", "doesn't work", "fails", "wrong" |
+| `feature` | "add", "new", "would be nice", "request", "support for" |
+| `change-request` | "change", "modify", "adjust", "different behavior" |
+| `question` | "how to", "why does", "confused", "wondering" |
 
-If unclear, ask the user.
+If it's genuinely ambiguous, ask. But most user messages make the type obvious — trust your judgment.
 
-### Step 3: Draft issue from template
+### 3. Draft the issue
 
-Read the template from `references/issue-templates.md` for the determined type. Auto-fill:
-- `{plugin_name}` — from resolver result
-- `{version}` — from resolver result
-- `{marketplace}` — from resolver result
-- `{os}` — detect via `uname -s` (Darwin/Linux)
+Read the template for the determined type from `references/issue-templates.md`.
 
-Fill remaining fields from the user's description. Present the draft to the user for review.
+Fill in what you can from the conversation and the resolver output. For fields you
+don't have enough information for, either ask the user or omit the section entirely —
+a shorter issue with real content is better than one padded with "N/A" placeholders.
+Detect the OS via `uname -s`.
 
-### Step 4: User review
+### 4. Confirm with the user
 
-Show the complete issue draft (title and body) and ask the user to confirm or edit. Do not create the issue without explicit approval.
+Show the complete draft (title + body) and ask for approval. Never create without
+explicit confirmation.
 
-### Step 5: Create on GitHub
+### 5. Create on GitHub
 
 ```bash
-gh issue create --repo "{owner_repo}" --title "{title}" --body "{body}" --label "{type}"
+gh issue create --repo "<owner_repo>" --title "<title>" --body "<body>" --label "<label>"
 ```
 
-Where `{type}` maps to the GitHub label per the label mapping in `references/issue-templates.md`.
+Label mapping is in `references/issue-templates.md`. If the label doesn't exist on
+the repo, retry without `--label` and mention this to the user.
 
-If label creation fails (label doesn't exist), retry without the `--label` flag and note this in the output.
+If creation fails for other reasons (auth, permissions, network), show the error and
+suggest next steps rather than retrying blindly.
 
-### Step 6: Log locally
-
-Generate an ID and add the issue to local state:
+### 6. Log locally
 
 ```bash
-bash "${COGNI_WORKSPACE_PLUGIN}/skills/plugin-issues/scripts/issue-store.sh" gen-id
-bash "${COGNI_WORKSPACE_PLUGIN}/skills/plugin-issues/scripts/issue-store.sh" add "${working_dir}" '{json}'
+ID_JSON=$(bash "${SKILL_DIR}/scripts/issue-store.sh" gen-id)
 ```
 
-The JSON record should include: `id`, `plugin`, `marketplace`, `repository`, `github_number`, `github_url`, `type`, `title`, `status` ("open"), `created_at`, `updated_at`.
+Then pipe the issue record as JSON via stdin:
 
-Parse `github_number` and `github_url` from the `gh issue create` output.
+```bash
+echo '<json_record>' | bash "${SKILL_DIR}/scripts/issue-store.sh" add "${working_dir}"
+```
 
-### Step 7: Confirm
+The record includes: `id`, `plugin`, `marketplace`, `repository`, `github_number`,
+`github_url`, `type`, `title`, `status` ("open"), `created_at`, `updated_at`.
 
-Return the GitHub issue URL to the user.
+Parse `github_number` and `github_url` from `gh issue create` output.
+
+### 7. Confirm
+
+Return the GitHub issue URL and local issue ID.
 
 ## List mode
 
-Read the local issue store:
-
 ```bash
-bash "${COGNI_WORKSPACE_PLUGIN}/skills/plugin-issues/scripts/issue-store.sh" read "${working_dir}"
+bash "${SKILL_DIR}/scripts/issue-store.sh" read "${working_dir}"
 ```
 
-Display issues grouped by plugin, showing for each:
-- Title and type badge
-- GitHub issue number and URL
-- Status
-- Created date
-
-If no issues exist, tell the user and suggest the create flow.
+Display issues grouped by plugin: title, type badge, GitHub number + URL, status, date.
+If empty, suggest the create flow.
 
 ## Status mode
 
-Given an issue ID or GitHub number:
-
-1. Look up the issue in local `issues.json` to get the `owner_repo` and `github_number`
-2. Fetch current status from GitHub:
+1. Look up the issue in local state to get `owner_repo` and `github_number`
+2. Fetch from GitHub:
    ```bash
-   gh issue view {github_number} --repo "{owner_repo}" --json state,title,labels,comments,updatedAt
+   gh issue view <number> --repo "<owner_repo>" --json state,title,labels,comments,updatedAt
    ```
-3. Update the local record's status via `update-status`
-4. Display: current state, latest comments summary, labels, last update time
+3. Update local record via `update-status`
+4. Show: state, latest comments summary, labels, last update
 
 ## Browse mode
 
-Open the issue in the user's default browser:
-
 ```bash
-gh issue view {github_number} --repo "{owner_repo}" --web
+gh issue view <number> --repo "<owner_repo>" --web
 ```
 
 ## Scripts
 
-- **`scripts/resolve-plugin.sh`** — Resolves a plugin name to its GitHub repository by scanning marketplace.json files. Invoke: `bash "${COGNI_WORKSPACE_PLUGIN}/skills/plugin-issues/scripts/resolve-plugin.sh" <plugin-name>`
-- **`scripts/issue-store.sh`** — Local JSON state management (init, gen-id, add, read, update-status). Invoke: `bash "${COGNI_WORKSPACE_PLUGIN}/skills/plugin-issues/scripts/issue-store.sh" <command> [args...]`
+- **`scripts/resolve-plugin.sh`** — Resolves a plugin name to its GitHub repo by scanning marketplace.json files
+- **`scripts/issue-store.sh`** — Local JSON state management (init, gen-id, add, read, update-status). The `add` command reads JSON from stdin for safety.
 
 ## References
 
-- **`references/issue-templates.md`** — Templates for the four issue types (bug, feature, change-request, question) with auto-fill placeholders and label mapping.
+- **`references/issue-templates.md`** — Templates for the four issue types with auto-fill placeholders and label mapping

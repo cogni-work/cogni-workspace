@@ -39,12 +39,11 @@ if [ -n "${COGNI_WORKSPACE_ROOT:-}" ]; then
   done
 fi
 
-# Source 3: Also check common dev locations as fallback
+# Source 3: Common dev locations as fallback
 for dev_path in \
   "$HOME/GitHub/dev/cogni-works/.claude-plugin/marketplace.json" \
   "$HOME/GitHub/dev/cogni-works-pro/.claude-plugin/marketplace.json"; do
   if [ -f "$dev_path" ]; then
-    # Avoid duplicates
     already=false
     for existing in "${MARKETPLACE_FILES[@]+"${MARKETPLACE_FILES[@]}"}"; do
       [ "$existing" = "$dev_path" ] && already=true && break
@@ -54,22 +53,26 @@ for dev_path in \
 done
 
 if [ ${#MARKETPLACE_FILES[@]} -eq 0 ]; then
-  echo '{"error":"no marketplace files found","plugin":"'"$PLUGIN_NAME"'"}' >&2
+  echo '{"error":"no marketplace files found","plugin":"'"$(echo "$PLUGIN_NAME" | tr -dc 'a-zA-Z0-9_-')"'"}' >&2
   exit 1
 fi
 
-# Build a newline-separated list of paths for python
-MP_LIST=""
+# Write paths to a temp file, pass plugin name as argv to avoid injection
+TMPFILE=$(mktemp)
+trap 'rm -f "$TMPFILE"' EXIT
+
 for mp in "${MARKETPLACE_FILES[@]}"; do
-  MP_LIST="${MP_LIST}${mp}"$'\n'
+  echo "$mp" >> "$TMPFILE"
 done
 
-# Use python3 to parse JSON and find the plugin
-echo "$MP_LIST" | python3 -c "
-import json, sys, os
+python3 -c "
+import json, sys
 
-plugin_name = '$PLUGIN_NAME'
-mp_paths = [p.strip() for p in sys.stdin.readlines() if p.strip()]
+plugin_name = sys.argv[1]
+mp_list_path = sys.argv[2]
+
+with open(mp_list_path) as f:
+    mp_paths = [line.strip() for line in f if line.strip()]
 
 results = []
 for mp_path in mp_paths:
@@ -83,7 +86,6 @@ for mp_path in mp_paths:
     for plugin in data.get('plugins', []):
         if plugin.get('name') == plugin_name:
             repo_url = plugin.get('repository', '')
-            # Convert https://github.com/owner/repo to owner/repo
             owner_repo = repo_url.replace('https://github.com/', '').rstrip('/')
             results.append({
                 'plugin': plugin_name,
@@ -95,7 +97,7 @@ for mp_path in mp_paths:
                 'license': plugin.get('license', 'unknown')
             })
 
-# Deduplicate: same owner_repo from different paths is the same plugin
+# Deduplicate by owner_repo
 seen = {}
 for r in results:
     key = r['owner_repo']
@@ -117,4 +119,4 @@ else:
         'ambiguous': True,
         'matches': results
     }))
-"
+" "$PLUGIN_NAME" "$TMPFILE"

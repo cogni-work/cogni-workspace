@@ -4,7 +4,7 @@
 #
 # Commands requiring <working_dir>:
 #   init <working_dir>                    Initialize cogni-issues/ workspace
-#   add <working_dir> <json>              Add an issue record (JSON on arg or stdin)
+#   add <working_dir>                     Add an issue record (reads JSON from stdin)
 #   read <working_dir>                    Read issues.json to stdout
 #   update-status <working_dir> <id> <status> [github_url]  Update issue status
 #
@@ -13,9 +13,6 @@
 #
 # All output is JSON on stdout. Errors go to stderr.
 # Compatible with bash 3.2 (macOS default).
-#
-# JSON FORMAT ASSUMPTION: This script expects pretty-printed JSON with one
-# field per line (as produced by Claude's Write tool).
 
 set -euo pipefail
 
@@ -23,7 +20,7 @@ COMMAND="${1:-}"
 
 usage() {
   echo "Usage: bash $0 <command> [args...]" >&2
-  echo "Commands: init <dir>, gen-id, add <dir> <json>, read <dir>, update-status <dir> <id> <status> [github_url]" >&2
+  echo "Commands: init <dir>, gen-id, add <dir>, read <dir>, update-status <dir> <id> <status> [github_url]" >&2
   exit 1
 }
 
@@ -70,24 +67,31 @@ ENDJSON
       echo "{\"error\":\"issues.json not found — run init first\",\"path\":\"$ISSUES_FILE\"}" >&2
       exit 1
     fi
-    # Issue JSON passed as arg 3 or via stdin
-    ISSUE_JSON="${3:-}"
-    if [ -z "$ISSUE_JSON" ]; then
-      ISSUE_JSON=$(cat)
-    fi
-    # Use python3 to append the issue to the array
+    # Read JSON from stdin into a temp file to avoid shell injection
+    TMPFILE=$(mktemp)
+    trap 'rm -f "$TMPFILE"' EXIT
+    cat > "$TMPFILE"
     python3 -c "
 import json, sys
-with open('$ISSUES_FILE') as f:
-    data = json.load(f)
-issue = json.loads('''$ISSUE_JSON''')
-data['issues'].append(issue)
 from datetime import datetime, timezone
+
+issues_path = sys.argv[1]
+input_path = sys.argv[2]
+
+with open(issues_path) as f:
+    data = json.load(f)
+
+with open(input_path) as f:
+    issue = json.load(f)
+
+data['issues'].append(issue)
 data['updated_at'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-with open('$ISSUES_FILE', 'w') as f:
+
+with open(issues_path, 'w') as f:
     json.dump(data, f, indent=2)
+
 print(json.dumps({'status': 'added', 'id': issue.get('id', 'unknown'), 'total': len(data['issues'])}))
-"
+" "$ISSUES_FILE" "$TMPFILE"
     ;;
 
   read)
@@ -114,28 +118,38 @@ print(json.dumps({'status': 'added', 'id': issue.get('id', 'unknown'), 'total': 
       exit 1
     fi
     python3 -c "
-import json
-with open('$ISSUES_FILE') as f:
+import json, sys
+from datetime import datetime, timezone
+
+issues_path = sys.argv[1]
+issue_id = sys.argv[2]
+new_status = sys.argv[3]
+github_url = sys.argv[4] if len(sys.argv) > 4 else ''
+
+with open(issues_path) as f:
     data = json.load(f)
+
 found = False
 for issue in data['issues']:
-    if issue.get('id') == '$ISSUE_ID':
-        issue['status'] = '$NEW_STATUS'
-        github_url = '$GITHUB_URL'
+    if issue.get('id') == issue_id:
+        issue['status'] = new_status
         if github_url:
             issue['github_url'] = github_url
-        from datetime import datetime, timezone
-        issue['updated_at'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-        data['updated_at'] = issue['updated_at']
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        issue['updated_at'] = now
+        data['updated_at'] = now
         found = True
         break
+
 if not found:
-    print(json.dumps({'error': 'issue not found', 'id': '$ISSUE_ID'}))
-    import sys; sys.exit(1)
-with open('$ISSUES_FILE', 'w') as f:
+    print(json.dumps({'error': 'issue not found', 'id': issue_id}))
+    sys.exit(1)
+
+with open(issues_path, 'w') as f:
     json.dump(data, f, indent=2)
-print(json.dumps({'status': 'updated', 'id': '$ISSUE_ID', 'new_status': '$NEW_STATUS'}))
-"
+
+print(json.dumps({'status': 'updated', 'id': issue_id, 'new_status': new_status}))
+" "$ISSUES_FILE" "$ISSUE_ID" "$NEW_STATUS" ${GITHUB_URL:+"$GITHUB_URL"}
     ;;
 
   *)
